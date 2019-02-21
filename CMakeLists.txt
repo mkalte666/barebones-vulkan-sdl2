@@ -46,3 +46,8 @@ set(GLM_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/3rdparty/glm/)
 include_directories(${GLM_INCLUDE_DIR})
 
 add_subdirectory(src)
+
+# copies for dlls
+if(WIN32 AND SDL2_DYNAMIC) 
+    configure_file(${SDL2_RUNTIME_LIBRARY} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/SDL2.dll COPYONLY)
+endif()

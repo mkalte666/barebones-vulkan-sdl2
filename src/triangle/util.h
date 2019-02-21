@@ -27,7 +27,7 @@
 
 // somewhat stolen from vulkan-tutorial.com
 struct QueueFamilyData {
-    QueueFamilyData(const vk::PhysicalDevice& device, vk::SurfaceKHR windowSurface);
+    QueueFamilyData(const vk::PhysicalDevice& device, vk::UniqueSurfaceKHR& windowSurface);
 
     std::vector<uint32_t> get() const;
 
@@ -40,5 +40,7 @@ struct QueueFamilyData {
 
     operator bool() const;
 };
+
+
 
 #endif //_util_h

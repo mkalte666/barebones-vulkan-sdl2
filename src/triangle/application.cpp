@@ -45,29 +45,25 @@ Application::Application(const ApplicationCreateInfo& appCreateInfo)
         exit(-1);
     }
 
-    window = SDL_CreateWindow(
+    auto windowPtr = SDL_CreateWindow(
         createInfo.title.c_str(),
         createInfo.x,
         createInfo.y,
         createInfo.w,
         createInfo.h,
         SDL_WINDOW_VULKAN);
-    if (!window) {
+    if (!windowPtr) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical SDL Window Error", SDL_GetError(), nullptr);
         exit(-1);
     }
+
+    window.reset(windowPtr);
 
     initVulkan();
 }
 
 Application::~Application()
 {
-    if (window) {
-        SDL_DestroyWindow(window);
-        window = nullptr;
-    }
-
-    SDL_Quit();
 }
 
 void Application::run()
@@ -79,7 +75,7 @@ void Application::run()
         }
     }
 
-    logicalDevice.waitIdle();
+    logicalDevice->waitIdle();
 }
 
 void Application::handleEvent(const SDL_Event& e)
@@ -114,7 +110,7 @@ void Application::initVulkan()
         initVulkanLogicalDevice();
         rebuildSwapchain();
     } catch (vk::SystemError err) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Ciritical Vulkan Error", err.what(), window);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Ciritical Vulkan Error", err.what(), window.get());
         exit(-1);
     }
 }
@@ -123,7 +119,7 @@ void Application::initVulkanInstance()
 {
     // get sdl2 needed extensions
     uint32_t sdlExtensionCount = 0;
-    SDL_Vulkan_GetInstanceExtensions(window, &sdlExtensionCount, nullptr);
+    SDL_Vulkan_GetInstanceExtensions(window.get(), &sdlExtensionCount, nullptr);
 
     // if we want validation, we need the extension for the callback
     if (createInfo.enableValidation) {
@@ -131,7 +127,7 @@ void Application::initVulkanInstance()
     }
     std::vector<const char*> extensions;
     extensions.resize(sdlExtensionCount);
-    SDL_Vulkan_GetInstanceExtensions(window, &sdlExtensionCount, extensions.data());
+    SDL_Vulkan_GetInstanceExtensions(window.get(), &sdlExtensionCount, extensions.data());
     // add requested extensions
     extensions.insert(extensions.end(), createInfo.instanceExtensions.begin(), createInfo.instanceExtensions.end());
 
@@ -166,8 +162,8 @@ void Application::initVulkanInstance()
         static_cast<uint32_t>(extensions.size()),
         extensions.data());
 
-    instance = vk::createInstance(instanceInfo);
-    dlinstance.init(instance);
+    instance = vk::createInstanceUnique(instanceInfo);
+    dlinstance.init(instance.get());
 
     if (createInfo.enableValidation) {
         vk::DebugUtilsMessengerCreateInfoEXT debugCreateInfo(
@@ -180,26 +176,26 @@ void Application::initVulkanInstance()
                 | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation,
             debugCallback,
             nullptr);
-        debugMessenger = instance.createDebugUtilsMessengerEXT(debugCreateInfo, nullptr, dlinstance);
+        debugMessenger = instance->createDebugUtilsMessengerEXT(debugCreateInfo, nullptr, dlinstance);
     }
 }
 
 void Application::initVulkanSurface()
 {
     VkSurfaceKHR surface;
-    if (!SDL_Vulkan_CreateSurface(window, instance, &surface)) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Vulkan Window Surface Error", SDL_GetError(), window);
+    if (!SDL_Vulkan_CreateSurface(window.get(), instance.get(), &surface)) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Vulkan Window Surface Error", SDL_GetError(), window.get());
         exit(-1);
     }
-    windowSurface = surface;
+    windowSurface = vk::UniqueSurfaceKHR(surface);
 }
 
 void Application::initVulkanPhysicalDevice()
 {
     // lets see what we have
-    auto availableDevices = instance.enumeratePhysicalDevices();
+    auto availableDevices = instance->enumeratePhysicalDevices();
     if (availableDevices.empty()) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Vulkan Error", "No GPU Available", window);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Vulkan Error", "No GPU Available", window.get());
         exit(-1);
     }
     // pick the phyiscal device.
@@ -230,8 +226,8 @@ void Application::initVulkanPhysicalDevice()
         }
 
         // check up on the swap chain
-        auto formats = device.getSurfaceFormatsKHR(windowSurface);
-        auto modes = device.getSurfacePresentModesKHR(windowSurface);
+        auto formats = device.getSurfaceFormatsKHR(windowSurface.get());
+        auto modes = device.getSurfacePresentModesKHR(windowSurface.get());
         if (formats.empty() || modes.empty()) {
             continue;
         }
@@ -240,7 +236,7 @@ void Application::initVulkanPhysicalDevice()
     }
 
     if (!physicalDevice) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Vulkan Error", "No Suitable GPU Availabe", window);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Vulkan Error", "No Suitable GPU Availabe", window.get());
         exit(-1);
     }
 
@@ -264,28 +260,28 @@ void Application::initVulkanLogicalDevice()
         createInfo.deviceExtensions.data(),
         &features);
 
-    logicalDevice = physicalDevice.createDevice(deviceInfo);
-    dldevice.init(instance, logicalDevice);
-    logicalDevice.getQueue(familyData.graphicsFamily.value(), 0, &graphicsQueue, dldevice);
-    logicalDevice.getQueue(familyData.presentFamily.value(), 0, &presentQueue, dldevice);
+    logicalDevice = physicalDevice.createDeviceUnique(deviceInfo);
+    dldevice.init(instance.get(), logicalDevice.get());
+    logicalDevice->getQueue(familyData.graphicsFamily.value(), 0, &graphicsQueue, dldevice);
+    logicalDevice->getQueue(familyData.presentFamily.value(), 0, &presentQueue, dldevice);
 }
 
 void Application::rebuildSwapchain()
 {
     // cleanup old swapchain
-    logicalDevice.waitIdle();
+    logicalDevice->waitIdle();
 
     // make new swapchain
     // find properties
-    auto formats = physicalDevice.getSurfaceFormatsKHR(windowSurface);
-    auto modes = physicalDevice.getSurfacePresentModesKHR(windowSurface);
+    auto formats = physicalDevice.getSurfaceFormatsKHR(windowSurface.get());
+    auto modes = physicalDevice.getSurfacePresentModesKHR(windowSurface.get());
     if (modes.empty() || formats.empty()) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Vulkan Error", "No mode or format for swapchain", window);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Critical Vulkan Error", "No mode or format for swapchain", window.get());
         exit(-1);
     }
 
     // calculate extend
-    auto capabilities = physicalDevice.getSurfaceCapabilitiesKHR(windowSurface);
+    auto capabilities = physicalDevice.getSurfaceCapabilitiesKHR(windowSurface.get());
     auto extend = capabilities.currentExtent;
     // if this is true, we need to yell a bit
     if (extend.width == std::numeric_limits<uint32_t>::max()) {
@@ -324,7 +320,7 @@ void Application::rebuildSwapchain()
     auto imageCount = std::min(capabilities.maxImageCount, capabilities.minImageCount + 1);
     vk::SwapchainCreateInfoKHR swapCreateInfo(
         vk::SwapchainCreateFlagsKHR(),
-        windowSurface,
+        windowSurface.get(),
         imageCount,
         format.format,
         format.colorSpace,
@@ -339,8 +335,8 @@ void Application::rebuildSwapchain()
         mode,
         true);
 
-    swapchain = logicalDevice.createSwapchainKHR(swapCreateInfo);
-    swapchainImages = logicalDevice.getSwapchainImagesKHR(swapchain);
+    swapchain = logicalDevice->createSwapchainKHRUnique(swapCreateInfo);
+    swapchainImages = logicalDevice->getSwapchainImagesKHR(swapchain.get());
     swapchainViews.reserve(swapchainImages.size());
     for (auto image : swapchainImages) {
         vk::ComponentMapping mapping(
@@ -356,6 +352,6 @@ void Application::rebuildSwapchain()
             format.format,
             mapping,
             range);
-        swapchainViews.push_back(logicalDevice.createImageView(viewCreateInfo));
+        swapchainViews.push_back(logicalDevice->createImageViewUnique(viewCreateInfo));
     }
 }

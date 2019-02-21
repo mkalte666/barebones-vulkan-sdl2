@@ -18,7 +18,7 @@
 
 #include "util.h"
 
-QueueFamilyData::QueueFamilyData(const vk::PhysicalDevice& device, vk::SurfaceKHR windowSurface)
+QueueFamilyData::QueueFamilyData(const vk::PhysicalDevice& device, vk::UniqueSurfaceKHR& windowSurface)
 {
     auto properties = device.getQueueFamilyProperties();
     int i = 0;
@@ -27,7 +27,7 @@ QueueFamilyData::QueueFamilyData(const vk::PhysicalDevice& device, vk::SurfaceKH
             graphicsFamily = i;
         }
 
-        bool presentSupport = device.getSurfaceSupportKHR(i, windowSurface);
+        bool presentSupport = device.getSurfaceSupportKHR(i, windowSurface.get());
         if (family.queueCount > 0 && presentSupport) {
             presentFamily = i;
         }

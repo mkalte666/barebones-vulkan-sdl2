@@ -23,6 +23,16 @@
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
+struct SdlDeleter {
+    void operator()(SDL_Window* w)
+    {
+        if (w) {
+            SDL_DestroyWindow(w);
+            SDL_Quit();
+        }
+    }
+};
+
 struct ApplicationCreateInfo {
     std::string title = "";
     int x = SDL_WINDOWPOS_CENTERED;
@@ -82,19 +92,19 @@ private:
 private:
     ApplicationCreateInfo createInfo;
     bool running;
-    SDL_Window* window;
-    vk::Instance instance;
+    std::unique_ptr<SDL_Window, SdlDeleter> window;
+    vk::UniqueInstance instance;
     vk::DispatchLoaderDynamic dlinstance;
     vk::DebugUtilsMessengerEXT debugMessenger;
-    vk::SurfaceKHR windowSurface;
+    vk::UniqueSurfaceKHR windowSurface;
     vk::PhysicalDevice physicalDevice;
-    vk::Device logicalDevice;
+    vk::UniqueDevice logicalDevice;
     vk::DispatchLoaderDynamic dldevice;
     vk::Queue graphicsQueue;
     vk::Queue presentQueue;
-    vk::SwapchainKHR swapchain;
+    vk::UniqueSwapchainKHR swapchain;
     std::vector<vk::Image> swapchainImages;
-    std::vector<vk::ImageView> swapchainViews;
+    std::vector<vk::UniqueImageView> swapchainViews;
 };
 
 #endif // _application_h

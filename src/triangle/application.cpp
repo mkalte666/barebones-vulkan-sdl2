@@ -187,7 +187,10 @@ void Application::initVulkanSurface()
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "SDL Vulkan Window Surface Error", SDL_GetError(), window.get());
         exit(-1);
     }
-    windowSurface = vk::UniqueSurfaceKHR(surface);
+
+    // otherwise this gets created with the default delete wich has things set to gibberish
+    vk::ObjectDestroy<vk::Instance, vk::DispatchLoaderStatic> surfaceDeleter(instance.get());
+    windowSurface = vk::UniqueSurfaceKHR(surface, surfaceDeleter);
 }
 
 void Application::initVulkanPhysicalDevice()
